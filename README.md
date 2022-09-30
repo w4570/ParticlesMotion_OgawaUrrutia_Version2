@@ -4,5 +4,5 @@ GDPHYSX Homework 1 - Particles Motion
 Members: Junma Ogawa, Julian Luis Urrutia
 
 Assignments:
-Junma Ogawa:
+Junma Ogawa: Particles structure, spawn and despawn, particle loop and control, gravity implementation.
 Julian Urrutia: Particles Foundation/Implementation, Particles Toggle Force, Particle Toggle Render
