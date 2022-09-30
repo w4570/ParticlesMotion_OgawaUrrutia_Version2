@@ -36,6 +36,8 @@ struct Particle {
 const int MaxParticles = 10000;
 Particle ParticlesContainer[MaxParticles];
 int LastUsedParticle = 0;
+bool forceBool = false, gravityBool = false, renderBool = true;
+float force = 0.0f, gravity = 0.0f;
 
 // Finds a Particle in ParticlesContainer which isn't used yet.
 // (i.e. life < 0);
@@ -58,8 +60,27 @@ int FindUnusedParticle() {
 	return 0; // All particles are taken, override the first one
 }
 
+
+
 void SortParticles() {
 	std::sort(&ParticlesContainer[0], &ParticlesContainer[MaxParticles]);
+}
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+
+	if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
+		renderBool = !renderBool;
+	}
+
+	if (key == GLFW_KEY_W && action == GLFW_PRESS) {
+		forceBool = !forceBool;
+	}
+
+	if (key == GLFW_KEY_E && action == GLFW_PRESS) {
+		gravityBool = !gravityBool;
+	}
+
 }
 
 int main (void) {
@@ -169,18 +190,16 @@ int main (void) {
 	// Initialize with empty (NULL) buffer : it will be updated later, each frame.
 	glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLubyte), NULL, GL_STREAM_DRAW);
 
-
-
 	double lastTime = glfwGetTime();
-	do
-	{
+
+	while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && glfwWindowShouldClose(window) == 0) {
+
 		// Clear the screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		double currentTime = glfwGetTime();
 		double delta = currentTime - lastTime;
 		lastTime = currentTime;
-
 
 		computeMatricesFromInputs();
 		glm::mat4 ProjectionMatrix = getProjectionMatrix();
@@ -190,10 +209,11 @@ int main (void) {
 		// w.r.t the camera's distance.
 		// There should be a getCameraPosition() function in common/controls.cpp, 
 		// but this works too.
-		glm::vec3 CameraPosition(glm::inverse(ViewMatrix)[3]);
 
+		glm::vec3 CameraPosition(glm::inverse(ViewMatrix)[3]);
 		glm::mat4 ViewProjectionMatrix = ProjectionMatrix * ViewMatrix;
 
+		
 
 		// Generate 10 new particule each millisecond,
 		// but limit this to 16 ms (60 fps), or if you have 1 long frame (1sec),
@@ -204,11 +224,15 @@ int main (void) {
 
 		for (int i = 0; i < newparticles; i++) {
 			int particleIndex = FindUnusedParticle();
-			ParticlesContainer[particleIndex].life = 5.0f; // This particle will live 5 seconds.
+			if (renderBool == true) {
+				ParticlesContainer[particleIndex].life = 5.0f; // This particle will live 5 seconds.
+			} else {
+				ParticlesContainer[particleIndex].life = 0.0f; // This particle will live 0 seconds.
+			}
 			ParticlesContainer[particleIndex].pos = glm::vec3(0, 0, -20.0f);
 
 			float spread = 1.5f;
-			glm::vec3 maindir = glm::vec3(0.0f, 10.0f, 0.0f);
+			glm::vec3 maindir = glm::vec3(0.0f, force, 0.0f);
 			// Very bad way to generate a random direction; 
 			// See for instance http://stackoverflow.com/questions/5408276/python-uniform-spherical-distribution instead,
 			// combined with some user-controlled parameters (main direction, spread, etc)
@@ -231,48 +255,68 @@ int main (void) {
 
 		}
 
+		glfwSetKeyCallback(window, key_callback);
 
+		if (forceBool == true) {
+			force = 10.0f;
+		}
+		else {
+			force = 0.0f;
+		}
+
+		if (gravityBool == true) {
+			gravity = -9.81f;
+		}
+		else {
+			gravity = -0.0f;
+		}
 
 		// Simulate all particles
+
 		int ParticlesCount = 0;
-		for (int i = 0; i < MaxParticles; i++) {
 
-			Particle& p = ParticlesContainer[i]; // shortcut
+		//if (renderBool == true) {
 
-			if (p.life > 0.0f) {
+			for (int i = 0; i < MaxParticles; i++) {
 
-				// Decrease life
-				p.life -= delta;
+				Particle& p = ParticlesContainer[i]; // shortcut
+
 				if (p.life > 0.0f) {
 
-					// Simulate simple physics : gravity only, no collisions
-					p.speed += glm::vec3(0.0f, -9.81f, 0.0f) * (float)delta * 0.5f;
-					p.pos += p.speed * (float)delta;
-					p.cameradistance = glm::length2(p.pos - CameraPosition);
-					//ParticlesContainer[i].pos += glm::vec3(0.0f,10.0f, 0.0f) * (float)delta;
+					// Decrease life
+					p.life -= delta;
+					if (p.life > 0.0f) {
 
-					// Fill the GPU buffer
-					g_particule_position_size_data[4 * ParticlesCount + 0] = p.pos.x;
-					g_particule_position_size_data[4 * ParticlesCount + 1] = p.pos.y;
-					g_particule_position_size_data[4 * ParticlesCount + 2] = p.pos.z;
+						p.speed += glm::vec3(0.0f, gravity, 0.0f) * (float)delta * 0.5f;
 
-					g_particule_position_size_data[4 * ParticlesCount + 3] = p.size;
+						// Simulate simple physics : gravity only, no collisions
+						p.pos += p.speed * (float)delta;
+						p.cameradistance = glm::length2(p.pos - CameraPosition);
+						//ParticlesContainer[i].pos += glm::vec3(0.0f,10.0f, 0.0f) * (float)delta;
 
-					g_particule_color_data[4 * ParticlesCount + 0] = p.r;
-					g_particule_color_data[4 * ParticlesCount + 1] = p.g;
-					g_particule_color_data[4 * ParticlesCount + 2] = p.b;
-					g_particule_color_data[4 * ParticlesCount + 3] = p.a;
+						// Fill the GPU buffer
+						g_particule_position_size_data[4 * ParticlesCount + 0] = p.pos.x;
+						g_particule_position_size_data[4 * ParticlesCount + 1] = p.pos.y;
+						g_particule_position_size_data[4 * ParticlesCount + 2] = p.pos.z;
+
+						g_particule_position_size_data[4 * ParticlesCount + 3] = p.size;
+
+						g_particule_color_data[4 * ParticlesCount + 0] = p.r;
+						g_particule_color_data[4 * ParticlesCount + 1] = p.g;
+						g_particule_color_data[4 * ParticlesCount + 2] = p.b;
+						g_particule_color_data[4 * ParticlesCount + 3] = p.a;
+
+					}
+					else {
+						// Particles that just died will be put at the end of the buffer in SortParticles();
+						p.cameradistance = -1.0f;
+					}
+
+					ParticlesCount++;
 
 				}
-				else {
-					// Particles that just died will be put at the end of the buffer in SortParticles();
-					p.cameradistance = -1.0f;
-				}
-
-				ParticlesCount++;
-
 			}
-		}
+		//}
 
 		SortParticles();
 
@@ -372,9 +416,7 @@ int main (void) {
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 
-	} // Check if the ESC key was pressed or the window was closed
-	while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
-		glfwWindowShouldClose(window) == 0);
+	}; // Check if the ESC key was pressed or the window was closed
 
 
 	delete[] g_particule_position_size_data;
